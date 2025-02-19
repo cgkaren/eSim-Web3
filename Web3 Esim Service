@@ -59,7 +59,7 @@ app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
 
-// Create package.json
+// Create necessary files
 const fs = require('fs');
 fs.writeFileSync('package.json', `{
   "name": "web3-esim-service",
@@ -77,5 +77,15 @@ fs.writeFileSync('package.json', `{
   }
 }`);
 
-// Create Procfile
 fs.writeFileSync('Procfile', 'web: node server.js');
+
+fs.writeFileSync('.nixpacks.toml', `[
+  phases.setup]
+  nixPkgs = ["nodejs_18"]
+
+  [phases.build]
+  cmds = ["npm install"]
+
+  [phases.start]
+  cmds = ["npm start"]
+`);
