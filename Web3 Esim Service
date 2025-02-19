@@ -1,0 +1,147 @@
+const express = require('express');
+const cors = require('cors');
+const { ethers } = require('ethers');
+require('dotenv').config();
+
+const app = express();
+app.use(express.json());
+app.use(cors());
+
+// Load environment variables
+const provider = new ethers.JsonRpcProvider(process.env.BLOCKCHAIN_RPC_URL);
+const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+
+const contractAddress = process.env.CONTRACT_ADDRESS;
+const contractABI = require('./ESIMPaymentABI.json');
+const contract = new ethers.Contract(contractAddress, contractABI, wallet);
+
+// Dummy eSIM provider API
+const ESIM_API_URL = 'https://api.example-esim.com/purchase';
+const axios = require('axios');
+const path = require('path');
+
+// Serve frontend
+app.use(express.static(path.join(__dirname, 'frontend/build')));
+
+// Endpoint to handle eSIM purchases
+app.post('/buy-esim', async (req, res) => {
+    try {
+        const { userAddress, token, amount } = req.body;
+        
+        // Verify payment on blockchain
+        const paymentReceived = await contract.balances(userAddress);
+        if (paymentReceived < amount) {
+            return res.status(400).json({ error: 'Payment not verified' });
+        }
+
+        // Call eSIM provider API to issue eSIM
+        const esimResponse = await axios.post(ESIM_API_URL, { userAddress, amount });
+        
+        if (esimResponse.data.success) {
+            return res.json({ success: true, esim: esimResponse.data.esimData });
+        } else {
+            return res.status(500).json({ error: 'Failed to issue eSIM' });
+        }
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Serve frontend for all routes
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'frontend/build', 'index.html'));
+});
+
+// Start the server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
+
+// React Frontend (Improved UI + Multi-Network Support)
+const fs = require('fs');
+const frontendCode = `
+import React, { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
+import axios from 'axios';
+import './App.css';
+
+const CONTRACT_ADDRESS = "${process.env.CONTRACT_ADDRESS}";
+const CONTRACT_ABI = require('./ESIMPaymentABI.json');
+
+function App() {
+    const [userAddress, setUserAddress] = useState('');
+    const [amount, setAmount] = useState('');
+    const [token, setToken] = useState('ETH');
+    const [message, setMessage] = useState('');
+    const [network, setNetwork] = useState('Ethereum');
+
+    useEffect(() => {
+        if (window.ethereum) {
+            window.ethereum.request({ method: 'eth_chainId' }).then(chainId => {
+                setNetwork(getNetworkName(chainId));
+            });
+        }
+    }, []);
+
+    const getNetworkName = (chainId) => {
+        switch (chainId) {
+            case '0x1': return 'Ethereum';
+            case '0x38': return 'Binance Smart Chain';
+            case '0x89': return 'Polygon';
+            case '0xa4b1': return 'Arbitrum';
+            default: return 'Unknown';
+        }
+    };
+
+    const handlePurchase = async () => {
+        if (!window.ethereum) return alert('Install MetaMask!');
+
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+        let tx;
+        if (token === 'ETH') {
+            tx = await signer.sendTransaction({
+                to: CONTRACT_ADDRESS,
+                value: ethers.parseEther(amount)
+            });
+        } else {
+            tx = await contract.buyESIM(token, ethers.parseEther(amount));
+        }
+        
+        await tx.wait();
+        setMessage('Payment sent! Verifying...');
+
+        const response = await axios.post('/buy-esim', { userAddress, token, amount });
+        if (response.data.success) {
+            setMessage(`eSIM Activated: ${response.data.esim}`);
+        } else {
+            setMessage('Error activating eSIM');
+        }
+    };
+
+    return (
+        <div className="container">
+            <h1>Buy eSIM with Crypto</h1>
+            <p>Connected Network: {network}</p>
+            <input type="text" placeholder="Your Wallet Address" onChange={(e) => setUserAddress(e.target.value)} />
+            <input type="text" placeholder="Amount" onChange={(e) => setAmount(e.target.value)} />
+            <select onChange={(e) => setToken(e.target.value)}>
+                <option value="ETH">ETH</option>
+                <option value="USDT">USDT</option>
+                <option value="BNB">BNB</option>
+                <option value="MATIC">MATIC</option>
+            </select>
+            <button onClick={handlePurchase}>Buy eSIM</button>
+            <p>{message}</p>
+        </div>
+    );
+}
+
+export default App;
+`;
+
+fs.writeFileSync('frontend/src/App.js', frontendCode);
