@@ -121,3 +121,73 @@ fs.writeFileSync('ESIMPaymentABI.json', `[
     "type": "function"
   }
 ]`);
+
+// Create ESIMPayment.sol smart contract file
+fs.writeFileSync('ESIMPayment.sol', `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract ESIMPayment {
+    mapping(address => uint256) public balances;
+
+    function deposit() public payable {
+        balances[msg.sender] += msg.value;
+    }
+
+    function getBalance(address _user) public view returns (uint256) {
+        return balances[_user];
+    }
+}`);
+
+// Create React App components for frontend
+const reactApp = `import React, { useState } from 'react';
+import { ethers } from 'ethers';
+import axios from 'axios';
+
+const CONTRACT_ADDRESS = "${process.env.CONTRACT_ADDRESS}";
+const CONTRACT_ABI = require('./ESIMPaymentABI.json');
+
+function App() {
+    const [userAddress, setUserAddress] = useState('');
+    const [amount, setAmount] = useState('');
+    const [message, setMessage] = useState('');
+
+    const handlePurchase = async () => {
+        if (!window.ethereum) return alert('Install MetaMask!');
+
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+        let tx;
+        tx = await signer.sendTransaction({
+            to: CONTRACT_ADDRESS,
+            value: ethers.parseEther(amount)
+        });
+
+        await tx.wait();
+        setMessage('Payment sent! Verifying...');
+
+        const response = await axios.post('/buy-esim', { userAddress, amount });
+        if (response.data.success) {
+            setMessage(`eSIM Activated: ${response.data.esim}`);
+        } else {
+            setMessage('Error activating eSIM');
+        }
+    };
+
+    return (
+        <div>
+            <h1>Buy eSIM with Crypto</h1>
+            <input type="text" placeholder="Your Wallet Address" onChange={(e) => setUserAddress(e.target.value)} />
+            <input type="text" placeholder="Amount" onChange={(e) => setAmount(e.target.value)} />
+            <button onClick={handlePurchase}>Buy eSIM</button>
+            <p>{message}</p>
+        </div>
+    );
+}
+
+export default App;
+`;
+
+fs.mkdirSync('frontend/src', { recursive: true });
+fs.writeFileSync('frontend/src/App.js', reactApp);
