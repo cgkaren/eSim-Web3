@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { ethers } = require('ethers');
 require('dotenv').config();
+const axios = require('axios');
 
 const app = express();
 app.use(express.json());
@@ -15,46 +16,45 @@ const contractAddress = process.env.CONTRACT_ADDRESS;
 const contractABI = require('./ESIMPaymentABI.json');
 const contract = new ethers.Contract(contractAddress, contractABI, wallet);
 
-// Dummy eSIM provider API
-const ESIM_API_URL = 'https://api.example-esim.com/purchase';
-const axios = require('axios');
-const path = require('path');
+const ESIM_API_URL = "https://esim-provider.com/api/purchase"; // API поставщика eSIM
 
-// Serve frontend
-app.use(express.static(path.join(__dirname, 'frontend/build')));
-
-// Endpoint to handle eSIM purchases
+// Endpoint для обработки покупки eSIM
 app.post('/buy-esim', async (req, res) => {
     try {
-        const { userAddress, token, amount } = req.body;
+        const { userAddress, amount } = req.body;
         
-        // Verify payment on blockchain
-        const paymentReceived = await contract.balances(userAddress);
-        if (paymentReceived < amount) {
+        // 1️⃣ Проверяем баланс в смарт-контракте
+        const paymentReceived = await contract.getBalance(userAddress);
+        const requiredAmount = ethers.parseEther(amount);
+
+        if (paymentReceived < requiredAmount) {
             return res.status(400).json({ error: 'Payment not verified' });
         }
 
-        // Call eSIM provider API to issue eSIM
-        const esimResponse = await axios.post(ESIM_API_URL, { userAddress, amount });
-        
+        console.log(`✅ Payment verified for ${userAddress}. Proceeding with eSIM purchase.`);
+
+        // 2️⃣ Запрос в API eSIM-поставщика
+        const esimResponse = await axios.post(ESIM_API_URL, {
+            userAddress: userAddress,
+            quantity: 1 // Можно менять на нужное количество eSIM
+        });
+
         if (esimResponse.data.success) {
-            return res.json({ success: true, esim: esimResponse.data.esimData });
+            console.log(`🎉 eSIM successfully issued for ${userAddress}`);
+            return res.json({ success: true, esimCode: esimResponse.data.esimCode });
         } else {
+            console.error(`❌ Error purchasing eSIM: ${esimResponse.data.error}`);
             return res.status(500).json({ error: 'Failed to issue eSIM' });
         }
+
     } catch (error) {
-        console.error(error);
+        console.error(`❌ Server error:`, error);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
-// Serve frontend for all routes
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'frontend/build', 'index.html'));
-});
-
-// Start the server
+// Запускаем сервер
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
 });
