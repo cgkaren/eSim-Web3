@@ -8,6 +8,10 @@ app.use(express.json());
 app.use(cors());
 
 // Load environment variables
+if (!process.env.PRIVATE_KEY || !process.env.PRIVATE_KEY.startsWith("0x") || process.env.PRIVATE_KEY.length !== 66) {
+    throw new Error("Invalid PRIVATE_KEY in .env file. Make sure it's correctly set and starts with '0x'.");
+}
+
 const provider = new ethers.JsonRpcProvider(process.env.BLOCKCHAIN_RPC_URL);
 const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 
@@ -93,4 +97,4 @@ fs.writeFileSync('.nixpacks.toml', `[
   cmds = ["npm start"]
 `);
 
-fs.writeFileSync('.gitignore', 'node_modules\n.env\n');
+fs.writeFileSync('.gitignore', 'node_modules\n.env\ndist\nfrontend/node_modules\n');
