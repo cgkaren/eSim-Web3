@@ -59,94 +59,8 @@ app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
 
-// React Frontend (Improved UI + Multi-Network Support)
+// Create package.json
 const fs = require('fs');
-const frontendCode = `
-import React, { useState, useEffect } from 'react';
-import { ethers } from 'ethers';
-import axios from 'axios';
-import './App.css';
-
-const CONTRACT_ADDRESS = "${process.env.CONTRACT_ADDRESS}";
-const CONTRACT_ABI = require('./ESIMPaymentABI.json');
-
-function App() {
-    const [userAddress, setUserAddress] = useState('');
-    const [amount, setAmount] = useState('');
-    const [token, setToken] = useState('ETH');
-    const [message, setMessage] = useState('');
-    const [network, setNetwork] = useState('Ethereum');
-
-    useEffect(() => {
-        if (window.ethereum) {
-            window.ethereum.request({ method: 'eth_chainId' }).then(chainId => {
-                setNetwork(getNetworkName(chainId));
-            });
-        }
-    }, []);
-
-    const getNetworkName = (chainId) => {
-        switch (chainId) {
-            case '0x1': return 'Ethereum';
-            case '0x38': return 'Binance Smart Chain';
-            case '0x89': return 'Polygon';
-            case '0xa4b1': return 'Arbitrum';
-            default: return 'Unknown';
-        }
-    };
-
-    const handlePurchase = async () => {
-        if (!window.ethereum) return alert('Install MetaMask!');
-
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        const signer = await provider.getSigner();
-        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-
-        let tx;
-        if (token === 'ETH') {
-            tx = await signer.sendTransaction({
-                to: CONTRACT_ADDRESS,
-                value: ethers.parseEther(amount)
-            });
-        } else {
-            tx = await contract.buyESIM(token, ethers.parseEther(amount));
-        }
-        
-        await tx.wait();
-        setMessage('Payment sent! Verifying...');
-
-        const response = await axios.post('/buy-esim', { userAddress, token, amount });
-        if (response.data.success) {
-            setMessage(`eSIM Activated: ${response.data.esim}`);
-        } else {
-            setMessage('Error activating eSIM');
-        }
-    };
-
-    return (
-        <div className="container">
-            <h1>Buy eSIM with Crypto</h1>
-            <p>Connected Network: {network}</p>
-            <input type="text" placeholder="Your Wallet Address" onChange={(e) => setUserAddress(e.target.value)} />
-            <input type="text" placeholder="Amount" onChange={(e) => setAmount(e.target.value)} />
-            <select onChange={(e) => setToken(e.target.value)}>
-                <option value="ETH">ETH</option>
-                <option value="USDT">USDT</option>
-                <option value="BNB">BNB</option>
-                <option value="MATIC">MATIC</option>
-            </select>
-            <button onClick={handlePurchase}>Buy eSIM</button>
-            <p>{message}</p>
-        </div>
-    );
-}
-
-export default App;
-`;
-
-fs.writeFileSync('frontend/src/App.js', frontendCode);
-
-// Package.json file for Railway
 fs.writeFileSync('package.json', `{
   "name": "web3-esim-service",
   "version": "1.0.0",
@@ -163,5 +77,5 @@ fs.writeFileSync('package.json', `{
   }
 }`);
 
-// Procfile for Railway
+// Create Procfile
 fs.writeFileSync('Procfile', 'web: node server.js');
